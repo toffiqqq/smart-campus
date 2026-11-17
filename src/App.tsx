@@ -173,7 +173,10 @@ export default function App() {
             {/* Blocked toggle */}
             <button
               type="button"
-              onClick={() => setBlocked((v) => !v)}
+              onClick={() => {
+                setBlocked((v) => !v);
+                setResult(null);
+              }}
               className={`w-full flex items-center justify-between rounded-xl px-4 py-3 mb-5 ring-1 transition-colors ${
                 blocked
                   ? "bg-rose-50 ring-rose-200 text-rose-800"

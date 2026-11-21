@@ -9,6 +9,7 @@ import {
   Unlock,
   CalendarClock,
   Timer,
+  Sparkles,
 } from "lucide-react";
 import {
   checkAvailability,
@@ -17,7 +18,6 @@ import {
   formatRange,
   MAX_DURATION,
   type Booking,
-  type FieldKey,
 } from "@/lib/availability";
 import { DEFAULT_NOW, DEFAULT_BOOKINGS } from "@/lib/fixtures";
 import {
@@ -30,6 +30,7 @@ import {
   formatValidationError,
   type FormState,
 } from "@/lib/formState";
+import { explainAvailability, type ReasonCode, type ExplanationResult } from "@/lib/explanationAdapter";
 import Timeline from "@/components/Timeline";
 import TimeField from "@/components/TimeField";
 import FieldError from "@/components/FieldError";
@@ -45,6 +46,8 @@ export default function App() {
   const [bookings] = useState<Booking[]>(DEFAULT_BOOKINGS);
 
   const [result, setResult] = useState<ReturnType<typeof checkAvailability> | null>(null);
+  const [explanation, setExplanation] = useState<ExplanationResult | null>(null);
+  const [explaining, setExplaining] = useState(false);
 
   const startMin = useMemo(() => labelToMinutes(startLabel), [startLabel]);
   const endMin = useMemo(() => labelToMinutes(endLabel), [endLabel]);
@@ -65,6 +68,32 @@ export default function App() {
     const newEnd = Math.min(startMin + preset, 1440);
     setEndLabel(minutesToLabel(newEnd));
     setResult(null);
+    setExplanation(null);
+  }
+
+  function reasonCodeOf(): ReasonCode {
+    if (!result) return "invalid";
+    if (result.available) return "available";
+    if (result.fieldErrors.conflict) return "conflict";
+    if (result.fieldErrors.blocked) return "blocked";
+    if (result.fieldErrors.start?.some((m) => m.includes("strictly after"))) return "past";
+    if (result.fieldErrors.duration) return "duration";
+    return "invalid";
+  }
+
+  async function handleExplain() {
+    if (!result || !candidate) return;
+    setExplaining(true);
+    setExplanation(null);
+    const r = await explainAvailability({
+      roomLabel: "Room LIB-204 · Library Wing",
+      start: candidate.start,
+      end: candidate.end,
+      isAvailable: result.available,
+      reasonCode: reasonCodeOf(),
+    });
+    setExplanation(r);
+    setExplaining(false);
   }
 
   function handleCheck() {
@@ -176,6 +205,7 @@ export default function App() {
               onClick={() => {
                 setBlocked((v) => !v);
                 setResult(null);
+                setExplanation(null);
               }}
               className={`w-full flex items-center justify-between rounded-xl px-4 py-3 mb-5 ring-1 transition-colors ${
                 blocked
@@ -209,6 +239,7 @@ export default function App() {
                 onChange={(v) => {
                   setStartLabel(v);
                   setResult(null);
+                  setExplanation(null);
                 }}
                 placeholder="14:30"
                 error={startErr}
@@ -220,6 +251,7 @@ export default function App() {
                 onChange={(v) => {
                   setEndLabel(v);
                   setResult(null);
+                  setExplanation(null);
                 }}
                 placeholder="15:30"
                 error={endErr}
@@ -347,6 +379,36 @@ export default function App() {
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+            {/* Explain availability — generated content, visually distinct from the confirmed status above */}
+            {result && (
+              <div className="mt-auto pt-4">
+                <button
+                  type="button"
+                  onClick={handleExplain}
+                  disabled={explaining}
+                  className="w-full rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:hover:bg-slate-100 text-slate-700 font-medium py-2.5 transition-colors text-sm ring-1 ring-slate-200 flex items-center justify-center gap-2"
+                >
+                  <Sparkles size={15} />
+                  {explaining ? "Generating…" : "Explain availability"}
+                </button>
+                {explanation && (
+                  <div
+                    aria-live="polite"
+                    className="mt-3 rounded-xl border border-dashed border-violet-300 bg-violet-50/60 px-4 py-3"
+                  >
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-500 mb-1 flex items-center gap-1">
+                      <Sparkles size={11} /> Generated explanation
+                    </p>
+                    <p className="text-sm text-slate-700 leading-relaxed">{explanation.text}</p>
+                    {!explanation.ok && (
+                      <p className="mt-1 text-[11px] text-violet-400">
+                        Shown from a safe fallback — the status above is unchanged.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </section>
